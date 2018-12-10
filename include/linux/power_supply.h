@@ -454,6 +454,7 @@ enum power_supply_property {
 #ifdef OPLUS_CUSTOM_OP_DEF
 	POWER_SUPPLY_PROP_RESET_RD,
 #endif
+	POWER_SUPPLY_PROP_MAX,
 };
 
 enum power_supply_type {
