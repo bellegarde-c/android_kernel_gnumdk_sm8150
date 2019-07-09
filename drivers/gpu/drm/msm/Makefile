@@ -241,3 +241,5 @@ msm_drm-y += oplus/oplus_mm_kevent_fb.o \
 	oplus/oplus_display_panel_hbm.o
 
 obj-$(CONFIG_DRM_MSM)	+= msm_drm.o
+
+CFLAGS_sde_crtc.o += -Wframe-larger-than=8192
