@@ -1895,9 +1895,9 @@ static int _sde_encoder_update_rsc_client(
 	int rc = 0;
 	int wait_refcount = 0;
 	u32 qsync_mode = 0;
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
 	struct msm_drm_private *priv;
 	struct sde_kms *sde_kms;
-#ifdef OPLUS_FEATURE_AOD_RAMLESS
 	int  lp_mode = -1;
 	struct list_head *connector_list;
 	struct drm_connector *conn = NULL, *conn_iter;
@@ -1931,6 +1931,7 @@ static int _sde_encoder_update_rsc_client(
 		return 0;
 	}
 
+#ifdef OPLUS_FEATURE_AOD_RAMLESS
 	priv = drm_enc->dev->dev_private;
 	if (!priv || !priv->kms) {
 		SDE_ERROR("Invalid kms\n");
@@ -1938,7 +1939,6 @@ static int _sde_encoder_update_rsc_client(
 	}
 
 	sde_kms = to_sde_kms(priv->kms);
-#ifdef OPLUS_FEATURE_AOD_RAMLESS
 	if ( display && display->panel && display->panel->oplus_priv.prj_flag ) {
 		connector_list = &sde_kms->dev->mode_config.connector_list;
 	}
@@ -1953,35 +1953,16 @@ static int _sde_encoder_update_rsc_client(
 		qsync_mode = sde_connector_get_qsync_mode(
 				sde_enc->cur_master->connector);
 
-	if (IS_SDE_MAJOR_SAME(sde_kms->core_rev, SDE_HW_VER_620)) {
-		if (sde_encoder_in_clone_mode(drm_enc) ||
-			!disp_info->is_primary || (disp_info->is_primary &&
-				qsync_mode))
-			rsc_state = enable ? SDE_RSC_CLK_STATE :
-					SDE_RSC_IDLE_STATE;
-		else if (sde_encoder_check_curr_mode(drm_enc,
-				MSM_DISPLAY_CMD_MODE))
-			rsc_state = enable ? SDE_RSC_CMD_STATE :
-					SDE_RSC_IDLE_STATE;
-		else if (sde_encoder_check_curr_mode(drm_enc,
-				MSM_DISPLAY_VIDEO_MODE))
-			rsc_state = enable ? SDE_RSC_VID_STATE :
-					SDE_RSC_IDLE_STATE;
-	} else {
-		if (sde_encoder_in_clone_mode(drm_enc))
-			rsc_state = enable ? SDE_RSC_CLK_STATE :
-					SDE_RSC_IDLE_STATE;
-		else
-			rsc_state = enable ? ((disp_info->is_primary &&
-				(sde_encoder_check_curr_mode(drm_enc,
-				MSM_DISPLAY_CMD_MODE)) && !qsync_mode) ?
-				SDE_RSC_CMD_STATE : SDE_RSC_VID_STATE) :
+	if (sde_encoder_in_clone_mode(drm_enc))
+		rsc_state = enable ? SDE_RSC_CLK_STATE :
 				SDE_RSC_IDLE_STATE;
-	}
+    else
+		rsc_state = enable ? ((disp_info->is_primary &&
+			(sde_encoder_check_curr_mode(drm_enc,
+			MSM_DISPLAY_CMD_MODE)) && !qsync_mode) ?
+			SDE_RSC_CMD_STATE : SDE_RSC_VID_STATE) :
+			SDE_RSC_IDLE_STATE;
 
-	if (IS_SDE_MAJOR_SAME(sde_kms->core_rev, SDE_HW_VER_620) &&
-			(rsc_state == SDE_RSC_VID_STATE))
-		rsc_state = SDE_RSC_CLK_STATE;
 #ifdef OPLUS_FEATURE_AOD_RAMLESS
 	if ( display && display->panel && display->panel->oplus_priv.prj_flag ) {
 		list_for_each_entry(conn_iter, connector_list, head)
