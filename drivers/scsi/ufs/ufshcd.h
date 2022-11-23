@@ -434,6 +434,7 @@ struct ufs_hba_crypto_variant_ops {
 				    struct scsi_cmnd *cmd,
 				    struct ufshcd_lrb *lrbp);
 	void *priv;
+	void *crypto_DO_NOT_USE[8];
 };
 
 /* clock gating state  */
@@ -479,6 +480,7 @@ struct ufs_clk_gating {
 	struct device_attribute delay_perf_attr;
 	struct device_attribute enable_attr;
 	bool is_enabled;
+	bool gate_wk_in_process;
 	int active_reqs;
 	struct workqueue_struct *clk_gating_workq;
 };
@@ -1092,8 +1094,6 @@ struct ufs_hba {
 
 	bool full_init_linereset;
 	struct pinctrl *pctrl;
-
-	int latency_hist_enabled;
 #ifdef VENDOR_EDIT
 	struct io_latency_state io_lat_read;
 	struct io_latency_state io_lat_write;
@@ -1104,6 +1104,7 @@ struct ufs_hba {
 	struct ufs_desc_size desc_size;
 	bool restore_needed;
 
+	int latency_hist_enabled;
 	struct io_latency_state io_lat_s;
 
 	bool reinit_g4_rate_A;
@@ -1125,6 +1126,7 @@ struct ufs_hba {
 	union ufs_crypto_cap_entry *crypto_cap_array;
 	u32 crypto_cfg_register;
 	struct keyslot_manager *ksm;
+	void *crypto_DO_NOT_USE[8];
 #endif /* CONFIG_SCSI_UFS_CRYPTO */
 };
 
