@@ -47,17 +47,8 @@
 
 #include <linux/math64.h>
 
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-#include "oplus_foreground_io_opt/oplus_foreground_io_opt.h"
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-#include <linux/iomonitor/iomonitor.h>
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 
-#ifdef OPLUS_FEATURE_UIFIRST
-#include <linux/uifirst/uifirst_sched_common.h>
-#endif /*OPLUS_FEATURE_UIFIRST*/
 
 #ifdef CONFIG_DEBUG_FS
 struct dentry *blk_debugfs_root;
@@ -141,9 +132,6 @@ void blk_rq_init(struct request_queue *q, struct request *rq)
 	memset(rq, 0, sizeof(*rq));
 
 	INIT_LIST_HEAD(&rq->queuelist);
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-	INIT_LIST_HEAD(&rq->fg_list);
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 	INIT_LIST_HEAD(&rq->timeout_list);
 	rq->cpu = -1;
 	rq->q = q;
@@ -935,9 +923,6 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 	if (!q)
 		return NULL;
 
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-	INIT_LIST_HEAD(&q->fg_head);
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 	q->id = ida_simple_get(&blk_queue_ida, 0, 0, gfp_mask);
 	if (q->id < 0)
 		goto fail_q;
@@ -959,9 +944,6 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 	q->backing_dev_info->capabilities = BDI_CAP_CGROUP_WRITEBACK;
 	q->backing_dev_info->name = "block";
 	q->node = node_id;
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-	fg_bg_max_count_init(q);
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 	setup_timer(&q->backing_dev_info->laptop_mode_wb_timer,
 		    laptop_mode_timer_fn, (unsigned long) q);
 	setup_timer(&q->timeout, blk_rq_timed_out_timer, (unsigned long) q);
@@ -1405,9 +1387,6 @@ out:
 	 */
 	if (ioc_batching(q, ioc))
 		ioc->nr_batch_requests--;
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-	iomonitor_init_reqstats(rq);
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 	trace_block_getrq(q, bio, op);
 	return rq;
 
@@ -1911,15 +1890,7 @@ void blk_init_request_from_bio(struct request *req, struct bio *bio)
 
 	if (bio->bi_opf & REQ_RAHEAD)
 		req->cmd_flags |= REQ_FAILFAST_MASK;
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-	if (bio->bi_opf & REQ_FG)
-		req->cmd_flags |= REQ_FG;
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 
-#ifdef OPLUS_FEATURE_UIFIRST
-	if (bio->bi_opf & REQ_UX)
-		req->cmd_flags |= REQ_UX;
-#endif /*OPLUS_FEATURE_UIFIRST*/
 
 	req->__sector = bio->bi_iter.bi_sector;
 	if (ioprio_valid(bio_prio(bio)))
@@ -2447,17 +2418,11 @@ blk_qc_t submit_bio(struct bio *bio)
 
 		if (op_is_write(bio_op(bio))) {
 			count_vm_events(PGPGOUT, count);
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-			iomonitor_update_vm_stats(PGPGOUT, count);
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 		} else {
 			if (bio_flagged(bio, BIO_WORKINGSET))
 				workingset_read = true;
 			task_io_account_read(bio->bi_iter.bi_size);
 			count_vm_events(PGPGIN, count);
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-			iomonitor_update_vm_stats(PGPGIN, count);
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 		}
 
 		if (unlikely(block_dump)) {
@@ -2478,15 +2443,7 @@ blk_qc_t submit_bio(struct bio *bio)
 	 */
 	if (workingset_read)
 		psi_memstall_enter(&pflags);
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-	if (high_prio_for_task(current))
-		bio->bi_opf |= REQ_FG;
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 
-#ifdef OPLUS_FEATURE_UIFIRST
-	if (test_task_ux(current))
-		bio->bi_opf |= REQ_UX;
-#endif /*OPLUS_FEATURE_UIFIRST*/
 
 	ret = generic_make_request(bio);
 
@@ -2775,9 +2732,6 @@ struct request *blk_peek_request(struct request_queue *q)
 			rq-> block_io_start = ktime_get();
 #endif
 
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-			rq->req_td = ktime_get();
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 
 			trace_block_rq_issue(q, rq);
 		}
@@ -2839,9 +2793,6 @@ struct request *blk_peek_request(struct request_queue *q)
 			break;
 		}
 	}
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-	iomonitor_record_io_history(rq);
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 	return rq;
 }
 EXPORT_SYMBOL(blk_peek_request);
@@ -2854,9 +2805,6 @@ static void blk_dequeue_request(struct request *rq)
 	BUG_ON(ELV_ON_HASH(rq));
 
 	list_del_init(&rq->queuelist);
-#if defined(OPLUS_FEATURE_FG_IO_OPT) && defined(CONFIG_OPLUS_FG_IO_OPT)
-	list_del_init(&rq->fg_list);
-#endif /*OPLUS_FEATURE_FG_IO_OPT*/
 	/*
 	 * the time frame between a request being removed from the lists
 	 * and to it is freed is accounted as io that is in progress at
@@ -2865,12 +2813,6 @@ static void blk_dequeue_request(struct request *rq)
 	if (blk_account_rq(rq)) {
 		q->in_flight[rq_is_sync(rq)]++;
 		set_io_start_time_ns(rq);
-#ifdef OPLUS_FEATURE_HEALTHINFO
-// Add for ioqueue
-#ifdef CONFIG_OPLUS_HEALTHINFO
-		ohm_ioqueue_add_inflight(q, rq);
-#endif
-#endif /* OPLUS_FEATURE_HEALTHINFO */
 	}
 }
 
@@ -2960,9 +2902,6 @@ bool blk_update_request(struct request *req, blk_status_t error,
 
 	trace_block_rq_complete(req, blk_status_to_errno(error), nr_bytes);
 
-#if defined(OPLUS_FEATURE_IOMONITOR) && defined(CONFIG_IOMONITOR)
-	iomonitor_record_reqstats(req, nr_bytes);
-#endif /*OPLUS_FEATURE_IOMONITOR*/
 
 #if defined(VENDOR_EDIT) && defined(CONFIG_OPLUS_HEALTHINFO)
 			if(req->tag >= 0 && req->block_io_start > 0)

@@ -264,9 +264,6 @@ static void ufshcd_update_uic_error_cnt(struct ufs_hba *hba, u32 reg, int type)
 /* default value of ref clock gating wait time is 100 micro seconds */
 #define UFSHCD_REF_CLK_GATING_WAIT_US 100 /* microsecs */
 
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-#define UFS_FFU_DOWNLOAD_MODE 0x0E
-#endif
 
 #define UFSHCD_CLK_GATING_DELAY_MS_PWR_SAVE	10
 #define UFSHCD_CLK_GATING_DELAY_MS_PERF		50
@@ -1798,21 +1795,11 @@ static int ufshcd_clock_scaling_prepare(struct ufs_hba *hba)
 	 */
 	down_write(&hba->lock);
 if ((hba->dev_info.quirks & UFS_DEVICE_QUIRK_D1_FFU_RESET) || (hba->dev_info.quirks & UFS_DEVICE_QUIRK_D2_FFU_RESET)) {
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-if (down_write_trylock(&hba->ffu_lock) == 0) {
-		ret = -EBUSY;
-		up_write(&hba->lock);
-		return ret;
-	}
-#endif
 }
 	ufshcd_scsi_block_requests(hba);
 	if (ufshcd_wait_for_doorbell_clr(hba, DOORBELL_CLR_TOUT_US)) {
 		ret = -EBUSY;
 if ((hba->dev_info.quirks & UFS_DEVICE_QUIRK_D1_FFU_RESET) || (hba->dev_info.quirks & UFS_DEVICE_QUIRK_D2_FFU_RESET)) {
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-		up_write(&hba->ffu_lock);
-#endif
 }
 		up_write(&hba->lock);
 		ufshcd_scsi_unblock_requests(hba);
@@ -1824,9 +1811,6 @@ if ((hba->dev_info.quirks & UFS_DEVICE_QUIRK_D1_FFU_RESET) || (hba->dev_info.qui
 static void ufshcd_clock_scaling_unprepare(struct ufs_hba *hba)
 {
 if ((hba->dev_info.quirks & UFS_DEVICE_QUIRK_D1_FFU_RESET) || (hba->dev_info.quirks & UFS_DEVICE_QUIRK_D2_FFU_RESET)) {
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	up_write(&hba->ffu_lock);
-#endif
 }
 	up_write(&hba->lock);
 	ufshcd_scsi_unblock_requests(hba);
@@ -3770,85 +3754,6 @@ static inline void ufshcd_put_read_lock(struct ufs_hba *hba)
 	up_read(&hba->lock);
 }
 
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-static int ufshcd_ffu_wait_for_doorbell_clr(struct ufs_hba *hba,
-					u64 wait_timeout_us)
-{
-	unsigned long flags;
-	int ret = 0;
-	u32 tm_doorbell;
-	u32 tr_doorbell;
-	bool timeout = false, do_last_check = false;
-	ktime_t start;
-
-	spin_lock_irqsave(hba->host->host_lock, flags);
-	/*
-	 * Wait for all the outstanding tasks/transfer requests.
-	 * Verify by checking the doorbell registers are clear.
-	 */
-	start = ktime_get();
-	do {
-		if (hba->ufshcd_state != UFSHCD_STATE_OPERATIONAL) {
-			ret = -EBUSY;
-			goto out;
-		}
-
-		tm_doorbell = ufshcd_readl(hba, REG_UTP_TASK_REQ_DOOR_BELL);
-		tr_doorbell = ufshcd_readl(hba, REG_UTP_TRANSFER_REQ_DOOR_BELL);
-		if (!tm_doorbell && !tr_doorbell) {
-			timeout = false;
-			break;
-		} else if (do_last_check) {
-			break;
-		}
-
-		spin_unlock_irqrestore(hba->host->host_lock, flags);
-		schedule();
-		if (ktime_to_us(ktime_sub(ktime_get(), start)) >
-		    wait_timeout_us) {
-			timeout = true;
-			/*
-			 * We might have scheduled out for long time so make
-			 * sure to check if doorbells are cleared by this time
-			 * or not.
-			 */
-			do_last_check = true;
-		}
-		spin_lock_irqsave(hba->host->host_lock, flags);
-	} while (tm_doorbell || tr_doorbell);
-
-	if (timeout) {
-		dev_err(hba->dev,
-			"%s: timedout waiting for doorbell to clear (tm=0x%x, tr=0x%x)\n",
-			__func__, tm_doorbell, tr_doorbell);
-		ret = -EBUSY;
-	}
-out:
-	spin_unlock_irqrestore(hba->host->host_lock, flags);
-	return ret;
-}
-
-static int ufshcd_ffu_write_buffer_prepare(struct ufs_hba *hba)
-{
-	int ret = 0;
-	/*
-	 * make sure that there are no outstanding requests when
-	 * clock scaling is in progress
-	 */
-	ufshcd_scsi_block_requests(hba);
-	if (ufshcd_ffu_wait_for_doorbell_clr(hba, DOORBELL_CLR_TOUT_US)) {
-		ret = -EBUSY;
-		ufshcd_scsi_unblock_requests(hba);
-	}
-
-	return ret;
-}
-
-static void ufshcd_ffu_write_buffer_unprepare(struct ufs_hba *hba)
-{
-	ufshcd_scsi_unblock_requests(hba);
-}
-#endif
 
 
 /**
@@ -3866,9 +3771,6 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	int tag;
 	int err = 0;
 	bool has_read_lock = false;
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	int retry = 3;
-#endif
 #ifdef VENDOR_EDIT
 #if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
 	struct scsi_cmnd *pre_cmd;
@@ -4070,17 +3972,6 @@ send_orig_cmd:
 	}
 
 if ((hba->dev_info.quirks & UFS_DEVICE_QUIRK_D1_FFU_RESET) || (hba->dev_info.quirks & UFS_DEVICE_QUIRK_D2_FFU_RESET)) {
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	if ((UFS_FFU_DOWNLOAD_MODE == cmd->req.cmd[1]) && (WRITE_BUFFER == cmd->req.cmd[0])) {
-		while(retry--) {
-			pr_err("ufs ffu block host retry: %d\n", retry);
-			if (!ufshcd_ffu_write_buffer_prepare(hba)) {
-				hba->set_host_blocked = 1;
-				break;
-			}
-		}
-	}
-#endif
 }
 	/* Make sure descriptors are ready before ringing the doorbell */
 	wmb();
@@ -6715,27 +6606,6 @@ static irqreturn_t ufshcd_uic_cmd_compl(struct ufs_hba *hba, u32 intr_status)
 	return retval;
 }
 
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-static void ffu_write_buffer_finish_work_fun(struct work_struct *work) {
-	struct ufs_hba *hba = NULL;
-	struct scsi_cmnd cmd;
-	int ret = -1;
-
-	hba = container_of(work, struct ufs_hba, ffu_write_buffer_finished_work);
-	cmd.device = hba->sdev_ufs_device;
-	ret = ufshcd_eh_host_reset_handler(&cmd);
-	if (SUCCESS == ret ) {
-		pr_err("ufs ffu reset succeed\n");
-	} else {
-		pr_err("ufs ffu reset failed\n");
-	}
-
-	if (hba->set_host_blocked) {
-		hba->set_host_blocked = 0;
-		ufshcd_ffu_write_buffer_unprepare(hba);
-	}
-}
-#endif
 
 
 /**
@@ -6748,10 +6618,6 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 {
 	struct ufshcd_lrb *lrbp;
 	struct scsi_cmnd *cmd;
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	struct scsi_request *rq = NULL;
-	unsigned char scmd[2] = {0};
-#endif
 	int result;
 	int index;
 	struct request *req;
@@ -6760,11 +6626,6 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 		lrbp = &hba->lrb[index];
 		cmd = lrbp->cmd;
 		if (cmd) {
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-			rq = &(cmd->req);
-			scmd[0] = rq->cmd[0];
-			scmd[1] = rq->cmd[1];
-#endif
 			ufshcd_cond_add_cmd_trace(hba, index, "scsi_cmpl");
 			ufshcd_update_tag_stats_completion(hba, cmd);
 			result = ufshcd_transfer_rsp_status(hba, lrbp);
@@ -6829,12 +6690,6 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 			/* Do not touch lrbp after scsi done */
 			cmd->scsi_done(cmd);
 if ((hba->dev_info.quirks & UFS_DEVICE_QUIRK_D1_FFU_RESET) || (hba->dev_info.quirks & UFS_DEVICE_QUIRK_D2_FFU_RESET)) {
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-			if ((UFS_FFU_DOWNLOAD_MODE == scmd[1]) && (WRITE_BUFFER == scmd[0]))
-			{
-				schedule_work(&hba->ffu_write_buffer_finished_work);
-			}
-#endif
 }
 		} else if (lrbp->command_type == UTP_CMD_TYPE_DEV_MANAGE ||
 			lrbp->command_type == UTP_CMD_TYPE_UFS_STORAGE) {
@@ -11558,10 +11413,6 @@ int ufshcd_alloc_host(struct device *dev, struct ufs_hba **hba_handle)
 	hba->sg_entry_size = sizeof(struct ufshcd_sg_entry);
 
 
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	hba->set_host_blocked = 0;
-	INIT_WORK(&hba->ffu_write_buffer_finished_work, ffu_write_buffer_finish_work_fun);
-#endif
 	INIT_LIST_HEAD(&hba->clk_list_head);
 
 out_error:
@@ -11664,9 +11515,6 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	mutex_init(&hba->dev_cmd.lock);
 
 	init_rwsem(&hba->lock);
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	init_rwsem(&hba->ffu_lock);
-#endif
 
 	/* Initialize device management tag acquire wait queue */
 	init_waitqueue_head(&hba->dev_cmd.tag_wq);

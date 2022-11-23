@@ -1085,9 +1085,6 @@ struct ufs_hba {
 
 	/* sync b/w diff contexts */
 	struct rw_semaphore lock;
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-    struct rw_semaphore ffu_lock;
-#endif
 	unsigned long shutdown_in_prog;
 
 	/* If set, don't gate device ref_clk during clock gating */
@@ -1114,10 +1111,6 @@ struct ufs_hba {
 	bool force_g4;
 	/* distinguish between resume and restore */
 	bool restore;
-#ifdef OPLUS_FEATURE_STORAGE_TOOL
-	u8 set_host_blocked;
-	struct work_struct ffu_write_buffer_finished_work;
-#endif
 
 #ifdef VENDOR_EDIT
 #if defined(CONFIG_UFSFEATURE)

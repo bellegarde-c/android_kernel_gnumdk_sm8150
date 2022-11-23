@@ -1814,9 +1814,6 @@ static struct sched_domain *build_sched_domain(struct sched_domain_topology_leve
 	return sd;
 }
 
-#ifdef OPLUS_FEATURE_SCHED_ASSIST
-extern void update_ux_sched_cputopo(void);
-#endif
 
 /*
  * Build sched domains for a given set of CPUs and attach the sched domains
@@ -1927,9 +1924,6 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 
 	ret = 0;
 
-#ifdef OPLUS_FEATURE_SCHED_ASSIST
-	update_ux_sched_cputopo();
-#endif
 
 error:
 	__free_domain_allocs(&d, alloc_state, cpu_map);

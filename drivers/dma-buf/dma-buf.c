@@ -45,14 +45,7 @@
 #include <uapi/linux/dma-buf.h>
 #include <uapi/linux/magic.h>
 
-#ifdef OPLUS_FEATURE_LOWMEM_DBG
-/* usage when lowmmem occurs. */
-#include <soc/oplus/lowmem_dbg.h>
-#endif /* OPLUS_FEATURE_LOWMEM_DBG */
 
-#if defined(OPLUS_FEATURE_PERFORMANCE) && defined(CONFIG_PROC_FS)
-#include <linux/proc_fs.h>
-#endif
 
 static atomic_long_t name_counter;
 
@@ -493,13 +486,6 @@ static inline int is_dma_buf_file(struct file *file)
 	return file->f_op == &dma_buf_fops;
 }
 
-#ifdef OPLUS_FEATURE_LOWMEM_DBG
-/* usage when lowmmem occurs. */
-inline int oplus_is_dma_buf_file(struct file *file)
-{
-       return is_dma_buf_file(file);
-}
-#endif /* OPLUS_FEATURE_LOWMEM_DBG */
 
 static struct file *dma_buf_getfile(struct dma_buf *dmabuf, int flags)
 {
@@ -1361,7 +1347,7 @@ int dma_buf_get_flags(struct dma_buf *dmabuf, unsigned long *flags)
 }
 EXPORT_SYMBOL(dma_buf_get_flags);
 
-#if defined(CONFIG_DEBUG_FS) || (defined(OPLUS_FEATURE_PERFORMANCE) && defined(CONFIG_PROC_FS))
+#if defined(CONFIG_DEBUG_FS)
 static int dma_buf_debug_show(struct seq_file *s, void *unused)
 {
 	int ret;
@@ -1654,53 +1640,6 @@ static inline void dma_buf_uninit_debugfs(void)
 }
 #endif /* CONFIG_DEBUG_FS */
 
-#if defined(OPLUS_FEATURE_PERFORMANCE) && defined(CONFIG_PROC_FS)
-static struct proc_dir_entry *dma_buf_procfs_root;
-
-int dma_buf_init_procfs(void)
-{
-	struct proc_dir_entry *p;
-	int err = 0;
-
-	p = proc_mkdir("dma_buf", NULL);
-	if (IS_ERR(p))
-		return PTR_ERR(p);
-
-	dma_buf_procfs_root = p;
-
-	p = proc_create_data("bufinfo",
-			     S_IFREG | 0664,
-			     dma_buf_procfs_root,
-			     &dma_buf_debug_fops,
-			     NULL);
-	if (IS_ERR(p)) {
-		pr_debug("dma_buf: procfs: failed to create node bufinfo\n");
-		proc_remove(dma_buf_procfs_root);
-		dma_buf_procfs_root = NULL;
-		err = PTR_ERR(dma_buf_procfs_root);
-		return err;
-	}
-
-	p = proc_create_data("dmaprocs",
-			     S_IFREG | 0664,
-			     dma_buf_procfs_root,
-			     &dma_procs_debug_fops,
-			     NULL);
-	if (IS_ERR(p)) {
-		pr_debug("dma_buf: procfs: failed to create node dmaprocs\n");
-		proc_remove(dma_buf_procfs_root);
-		dma_buf_procfs_root = NULL;
-		err = PTR_ERR(dma_buf_procfs_root);
-	}
-
-	return err;
-}
-
-void dma_buf_uninit_procfs(void)
-{
-	proc_remove(dma_buf_procfs_root);
-}
-#endif /* defined(OPLUS_FEATURE_PERFORMANCE) && defined(CONFIG_PROC_FS) */
 
 #else
 static inline int dma_buf_init_debugfs(void)
@@ -1721,9 +1660,6 @@ static int __init dma_buf_init(void)
 	mutex_init(&db_list.lock);
 	INIT_LIST_HEAD(&db_list.head);
 	dma_buf_init_debugfs();
-#if defined(OPLUS_FEATURE_PERFORMANCE) && defined(CONFIG_PROC_FS)
-	dma_buf_init_procfs();
-#endif
 	return 0;
 }
 subsys_initcall(dma_buf_init);
@@ -1732,8 +1668,5 @@ static void __exit dma_buf_deinit(void)
 {
 	dma_buf_uninit_debugfs();
 	kern_unmount(dma_buf_mnt);
-#if defined(OPLUS_FEATURE_PERFORMANCE) && defined(CONFIG_PROC_FS)
-	dma_buf_uninit_procfs();
-#endif
 }
 __exitcall(dma_buf_deinit);

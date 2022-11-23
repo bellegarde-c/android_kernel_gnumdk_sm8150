@@ -23,6 +23,11 @@
 #include <linux/soc/qcom/smem.h>
 #include <linux/pstore.h>
 
+#define DUMP_REASON_SIZE 256
+static struct dump_info{
+    char dump_reason[DUMP_REASON_SIZE];  //dump reason
+};
+
 static struct component_info component_info_desc[COMPONENT_MAX];
 static struct kobject *project_info_kobj;
 static struct project_info *project_info_desc;

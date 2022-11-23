@@ -72,6 +72,8 @@
 
 #include "af_netlink.h"
 
+#define MAX_LINKS 40
+
 struct listeners {
 	struct rcu_head		rcu;
 	unsigned long		masks[0];

@@ -71,10 +71,6 @@ config F2FS_FS_SECURITY
 
 	  If you are not using a security module, say N.
 
-config OPLUS_F2FS_DEBUG
-	string
-	option env="OPLUS_F2FS_DEBUG"
-
 config F2FS_CHECK_FS
 	bool "F2FS consistency checking feature"
 	depends on F2FS_FS
