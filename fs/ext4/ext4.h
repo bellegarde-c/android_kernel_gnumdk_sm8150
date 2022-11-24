@@ -12,6 +12,7 @@
  *  linux/include/linux/minix_fs.h
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
+ *  Copyright (C) 2020 Oplus. All rights reserved.
  */
 
 #ifndef _EXT4_H
@@ -42,6 +43,9 @@
 
 #include <linux/fscrypt.h>
 #include <linux/fsverity.h>
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+#include "e4defrag.h"
+#endif
 
 /*
  * The fourth extended filesystem constants/structures
@@ -1377,7 +1381,6 @@ struct ext4_super_block {
 #define EXT4_ENC_UTF8_12_1	1
 
 
-
 /*
  * fourth extended-fs super-block data in memory
  */
@@ -1555,6 +1558,9 @@ struct ext4_sb_info {
 	struct percpu_rw_semaphore s_writepages_rwsem;
 	struct dax_device *s_daxdev;
 	/* for discard command control */
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+	struct ext4_defrag_info dfi;
+#endif
 };
 
 static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
@@ -2548,6 +2554,13 @@ extern int ext4_init_inode_table(struct super_block *sb,
 				 ext4_group_t group, int barrier);
 extern void ext4_end_bitmap_read(struct buffer_head *bh, int uptodate);
 
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+extern bool ext4_query_inode_range(struct super_block * sb, unsigned long start,
+		       unsigned long end, bool(*match_fn) (struct inode *inode,
+							   void *priv),
+		       void *priv);
+#endif
+
 /* mballoc.c */
 extern const struct file_operations ext4_seq_mb_groups_fops;
 extern long ext4_mb_stats;
@@ -2571,6 +2584,14 @@ extern int ext4_group_add_blocks(handle_t *handle, struct super_block *sb,
 				ext4_fsblk_t block, unsigned long count);
 extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
 extern void ext4_process_freed_data(struct super_block *sb, tid_t commit_tid);
+
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+extern bool ext4_mb_query_group_info(struct super_block * sb,
+			 ext4_group_t first_group, ext4_group_t nr_to_scan,
+			 bool(*match_fn) (struct ext4_group_info * grp,
+					  ext4_group_t group, void *priv),
+			 void *priv, bool reverse);
+#endif
 
 /* inode.c */
 int ext4_inode_is_fast_symlink(struct inode *inode);
@@ -2610,7 +2631,11 @@ extern struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 
 #define ext4_iget(sb, ino, flags) \
 	__ext4_iget((sb), (ino), (flags), __func__, __LINE__)
-
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+#define ext4_iget2(sb, ino) \
+	__ext4_iget((sb), (ino),EXT4_IGET_NORMAL, __func__, __LINE__)
+extern struct inode *ext4_iget_normal(struct super_block *, unsigned long);
+#endif
 extern int  ext4_write_inode(struct inode *, struct writeback_control *);
 extern int  ext4_setattr(struct dentry *, struct iattr *);
 extern int  ext4_getattr(const struct path *, struct kstat *, u32, unsigned int);
@@ -3312,6 +3337,13 @@ extern int ext4_swap_extents(handle_t *handle, struct inode *inode1,
 				struct inode *inode2, ext4_lblk_t lblk1,
 			     ext4_lblk_t lblk2,  ext4_lblk_t count,
 			     int mark_unwritten,int *err);
+
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+extern int ext4_query_extents_range(struct inode *inode, ext4_lblk_t block,
+				ext4_lblk_t num,
+				bool(*match_fn) (struct extent_status * es,
+							void *priv), void *priv);
+#endif
 
 /* move_extent.c */
 extern void ext4_double_down_write_data_sem(struct inode *first,

@@ -23,6 +23,8 @@
  *	Christopher Li, 2002
  *  Hash Tree Directory indexing cleanup
  *	Theodore Ts'o, 2002
+ *
+ *  Copyright (C) 2020 Oplus. All rights reserved.
  */
 
 #include <linux/fs.h>

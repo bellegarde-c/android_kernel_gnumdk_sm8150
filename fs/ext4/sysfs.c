@@ -6,6 +6,7 @@
  * Remy Card (card@masi.ibp.fr)
  * Theodore Ts'o (tytso@mit.edu)
  *
+ * Copyright (C) 2020 Oplus. All rights reserved.
  */
 
 #include <linux/time.h>
@@ -15,6 +16,9 @@
 
 #include "ext4.h"
 #include "ext4_jbd2.h"
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_FRAGMENT
+#include "mballoc.h"
+#endif
 
 typedef enum {
 	attr_noop,
@@ -27,6 +31,9 @@ typedef enum {
 	attr_feature,
 	attr_pointer_ui,
 	attr_pointer_atomic,
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+	attr_defrag_protect,
+#endif
 } attr_id_t;
 
 typedef enum {
@@ -233,6 +240,10 @@ EXT4_ATTR_FEATURE(casefold);
 EXT4_ATTR_FEATURE(verity);
 #endif
 EXT4_ATTR_FEATURE(metadata_csum_seed);
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+extern int ext4_defrag_protect;
+EXT4_ATTR(defrag_protect, 0666, defrag_protect);
+#endif
 
 static struct attribute *ext4_feat_attrs[] = {
 	ATTR_LIST(lazy_itable_init),
@@ -248,6 +259,9 @@ static struct attribute *ext4_feat_attrs[] = {
 	ATTR_LIST(verity),
 #endif
 	ATTR_LIST(metadata_csum_seed),
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+	ATTR_LIST(defrag_protect),
+#endif
 	NULL,
 };
 
@@ -302,6 +316,10 @@ static ssize_t ext4_attr_show(struct kobject *kobj,
 				atomic_read((atomic_t *) ptr));
 	case attr_feature:
 		return snprintf(buf, PAGE_SIZE, "supported\n");
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+	case attr_defrag_protect:
+		return snprintf(buf, PAGE_SIZE, "%d\n", ext4_defrag_protect);
+#endif
 	}
 
 	return 0;
@@ -336,6 +354,14 @@ static ssize_t ext4_attr_store(struct kobject *kobj,
 		return inode_readahead_blks_store(a, sbi, buf, len);
 	case attr_trigger_test_error:
 		return trigger_test_error(a, sbi, buf, len);
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_DEFRAG
+	case attr_defrag_protect:
+		ret = kstrtoul(skip_spaces(buf), 0, &t);
+		if (ret)
+			return ret;
+		ext4_defrag_protect = (int)t;
+		return len;
+#endif
 	}
 	return 0;
 }
@@ -393,7 +419,67 @@ static const struct file_operations ext4_seq_##name##_fops = { \
 
 PROC_FILE_SHOW_DEFN(es_shrinker_info);
 PROC_FILE_SHOW_DEFN(options);
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_FRAGMENT
+struct free_frag_data {
+	unsigned long total_free;
+	unsigned long counters[15];
+};
 
+static int count_free_frag(struct super_block *sb, ext4_group_t group,
+			   ext4_grpblk_t start, ext4_grpblk_t len, void *priv)
+{
+	struct free_frag_data *ffd = priv;
+	int order;
+	ffd->total_free += len;
+	order = min_t(int, fls(len), ARRAY_SIZE(ffd->counters)) - 1;
+	ffd->counters[order] += len;
+
+	return 0;
+}
+
+int ext4_get_free_frag_data(struct seq_file *seq, struct free_frag_data *ff)
+{
+	struct super_block *sb = seq->private;
+	struct free_frag_data *ffd = ff;
+	ext4_group_t group, ngroups;
+	ngroups = ext4_get_groups_count(sb);
+	for (group = 0; group < ngroups; group++)
+		ext4_mballoc_query_range(sb, group, 0, -1, count_free_frag, ffd);
+	return 0;
+}
+
+int ext4_seq_frag_score_show(struct seq_file *seq, void *offset)
+{
+	unsigned int score;
+	struct free_frag_data ffd;
+	memset(&ffd, 0, sizeof(ffd));
+	ext4_get_free_frag_data(seq, &ffd);
+	score = ffd.total_free ?
+	    (ffd.counters[0] + ffd.counters[1]) * 100 / ffd.total_free : 0;
+	seq_printf(seq, "%u\n", score);
+	return 0;
+}
+
+int ext4_seq_free_frag_show(struct seq_file *seq, void *offset)
+{
+	int i;
+	struct free_frag_data ffd;
+	memset(&ffd, 0, sizeof(ffd));
+	ext4_get_free_frag_data(seq, &ffd);
+	for (i = 0; i < ARRAY_SIZE(ffd.counters); i++) {
+#define FF_SIZE(n) ((n)>7 ? (1<<((n)-8)) : (4<<(n)))
+#define FF_UNIT(n) ((n)>7 ? 'M' : 'K')
+		seq_printf(seq, "%d%cto%d%c:%lu\n", FF_SIZE(i), FF_UNIT(i),
+			   FF_SIZE(i + 1), FF_UNIT(i + 1), ffd.counters[i]);
+#undef FF_SIZE
+#undef FF_UNIT
+	}
+	return 0;
+}
+
+PROC_FILE_SHOW_DEFN(frag_score);
+PROC_FILE_SHOW_DEFN(free_frag);
+#endif
 static const struct ext4_proc_files {
 	const char *name;
 	const struct file_operations *fops;
@@ -401,6 +487,10 @@ static const struct ext4_proc_files {
 	PROC_FILE_LIST(options),
 	PROC_FILE_LIST(es_shrinker_info),
 	PROC_FILE_LIST(mb_groups),
+#ifdef CONFIG_OPLUS_FEATURE_EXT4_FRAGMENT
+	PROC_FILE_LIST(frag_score),
+	PROC_FILE_LIST(free_frag),
+#endif
 	{ NULL, NULL },
 };
 

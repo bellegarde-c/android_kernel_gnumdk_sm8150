@@ -6,6 +6,8 @@
  * Remy Card (card@masi.ibp.fr)
  * Laboratoire MASI - Institut Blaise Pascal
  * Universite Pierre et Marie Curie (Paris VI)
+ *
+ * Copyright (C) 2020 Oplus. All rights reserved.
  */
 
 #include <linux/fs.h>

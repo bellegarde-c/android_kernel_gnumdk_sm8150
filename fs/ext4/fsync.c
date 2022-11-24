@@ -21,6 +21,8 @@
  *
  * Major simplications and cleanup - we only need to do the metadata, because
  * we can depend on generic_block_fdatasync() to sync the data blocks.
+ *
+ * Copyright (C) 2020 Oplus. All rights reserved.
  */
 
 #include <linux/time.h>
